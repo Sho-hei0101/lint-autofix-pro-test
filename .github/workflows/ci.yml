@@ -33,8 +33,9 @@ jobs:
         run: npx prettier . --write
 
       # ESLint: no-unused-vars は --fix では直せないので、この "autofix" では一時的にOFFにして他を直す
-      - name: ESLint (fix)
-        run: npx eslint . --fix --rule 'no-unused-vars: off'
+     - name: ESLint (fix)
+  run: |
+    npx eslint . --fix --rule "no-unused-vars: off"
 
       - name: Commit & push if changed
         run: |
