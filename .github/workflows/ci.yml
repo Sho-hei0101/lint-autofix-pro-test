@@ -2,7 +2,6 @@ name: CI
 
 on:
   pull_request:
-  workflow_dispatch:
 
 permissions:
   contents: write
@@ -10,9 +9,7 @@ permissions:
 
 jobs:
   autofix:
-    name: autofix
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,15 +22,12 @@ jobs:
 
       - run: npm ci
 
-      # Prettier: write
       - name: Prettier (write)
         run: npx prettier . --write
 
-      # ESLint: fix (ただし no-unused-vars は fix不能なので autofix では無効化)
       - name: ESLint (fix)
-        run: npx eslint . --fix --rule "no-unused-vars: off"
+        run: npx eslint . --fix || true
 
-      # 差分があればコミットして PR ブランチに push
       - name: Commit & push if changed
         run: |
           if [[ -n "$(git status --porcelain)" ]]; then
@@ -42,15 +36,11 @@ jobs:
             git add -A
             git commit -m "chore: autofix formatting"
             git push
-          else
-            echo "No changes to commit."
           fi
 
   check:
-    name: check
     runs-on: ubuntu-latest
     needs: autofix
-
     steps:
       - uses: actions/checkout@v4
 
@@ -61,7 +51,6 @@ jobs:
 
       - run: npm ci
 
-      # 最終検証（ここで no-unused-vars は error のまま落ちる＝設計通り）
       - name: Prettier (check)
         run: npx prettier . --check
 
