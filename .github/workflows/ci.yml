@@ -2,8 +2,7 @@ name: CI
 
 on:
   pull_request:
-  push:
-    branches: [ main ]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -11,14 +10,13 @@ permissions:
 
 jobs:
   autofix:
-    # フォークPRだとGITHUB_TOKENでpushできないので同一リポジトリPRだけ動かす
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    name: autofix
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-          persist-credentials: true
+          ref: ${{ github.head_ref }}
 
       - uses: actions/setup-node@v4
         with:
@@ -27,27 +25,32 @@ jobs:
 
       - run: npm ci
 
-      - name: Prettier write
+      # Prettier: write
+      - name: Prettier (write)
         run: npx prettier . --write
 
-      - name: ESLint fix
-        run: npx eslint . --fix
+      # ESLint: fix (ただし no-unused-vars は fix不能なので autofix では無効化)
+      - name: ESLint (fix)
+        run: npx eslint . --fix --rule "no-unused-vars: off"
 
+      # 差分があればコミットして PR ブランチに push
       - name: Commit & push if changed
         run: |
-          if git diff --quiet; then
+          if [[ -n "$(git status --porcelain)" ]]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add -A
+            git commit -m "chore: autofix formatting"
+            git push
+          else
             echo "No changes to commit."
-            exit 0
           fi
-          git config user.name "lint-autofix-pro"
-          git config user.email "lint-autofix-pro@users.noreply.github.com"
-          git add -A
-          git commit -m "chore: autofix (prettier/eslint)"
-          git push
 
   check:
-    needs: [autofix]
+    name: check
     runs-on: ubuntu-latest
+    needs: autofix
+
     steps:
       - uses: actions/checkout@v4
 
@@ -57,5 +60,10 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npx prettier . --check
-      - run: npx eslint .
+
+      # 最終検証（ここで no-unused-vars は error のまま落ちる＝設計通り）
+      - name: Prettier (check)
+        run: npx prettier . --check
+
+      - name: ESLint (check)
+        run: npx eslint .
