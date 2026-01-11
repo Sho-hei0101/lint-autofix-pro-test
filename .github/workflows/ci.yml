@@ -3,9 +3,50 @@ name: CI
 on:
   pull_request:
   push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
-  lint:
+  autofix:
+    # フォークPRだとGITHUB_TOKENでpushできないので同一リポジトリPRだけ動かす
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Prettier write
+        run: npx prettier . --write
+
+      - name: ESLint fix
+        run: npx eslint . --fix
+
+      - name: Commit & push if changed
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name "lint-autofix-pro"
+          git config user.email "lint-autofix-pro@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: autofix (prettier/eslint)"
+          git push
+
+  check:
+    needs: [autofix]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -13,12 +54,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: npm
 
       - run: npm ci
-
-      - name: Prettier (check)
-        run: npx prettier . --check
-
-      - name: ESLint
-        run: npx eslint .
+      - run: npx prettier . --check
+      - run: npx eslint .
